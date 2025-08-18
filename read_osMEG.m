@@ -37,6 +37,8 @@ trl_opm(:,4) = opm_raw.trial{1}(i_trig_opm,trig);
 trl_opm(:,1:2) = trl_opm(:,1:2) + floor(params.delay*opm_raw.fsample); % adjust for stim delay
 trl_opm = round(trl_opm);
 
+trl_opm = trl_opm(trl_opm(:,4)==params.trigger_codes,:);
+
 if ~opm_only
     % AUX
     trl_aux=[];
@@ -53,16 +55,20 @@ if ~opm_only
     trl_aux(:,1:2) = trl_aux(:,1:2) + floor(params.delay*aux_raw.fsample); % adjust for stim delay
     trl_aux = round(trl_aux);
     
-    % Check if uneven amount of trial. If so assume error in beginning.
-    if size(trl_aux,1) > size(trl_opm,1)
-        trl_aux = trl_aux((end-size(trl_opm,1)+1):end,:);
-    elseif size(trl_aux,1) < size(trl_opm,1)
-        trl_opm = trl_opm((end-size(trl_aux,1)+1):end,:);
-    end
-    if trl_aux(:,4) ~= trl_opm(:,4) % Throw error if trials don't match.
-        error('events do not match')
-    end
-    
+
+    % JL: WHAT IS THIS FOR? RESULTS IN ONLY 44 TRIALS SO I AM REMOVING THIS.
+    % % Check if uneven amount of trial. If so assume error in beginning.
+    % if size(trl_aux,1) > size(trl_opm,1)
+    %     trl_aux = trl_aux((end-size(trl_opm,1)+1):end,:);
+    % elseif size(trl_aux,1) < size(trl_opm,1)
+    %     trl_opm = trl_opm((end-size(trl_aux,1)+1):end,:);
+    % end
+    % if trl_aux(:,4) ~= trl_opm(:,4) % Throw error if trials don't match.
+    %     error('events do not match')
+    % end
+    trl_aux = trl_aux(trl_aux(:,4)==params.trigger_codes,:);
+
+
     %% AUX data filter & epoch
     cfg = [];
     %cfg.datafile        = aux_file;
@@ -137,7 +143,7 @@ if ~opm_only
     include_channels = [EOG_channels; ECG_channels; EEG_channels; MISC_channels; TRIG_channels];
     
     data = opm_epo_ds; 
-    data.elec = aux_epo.elec;
+    % data.elec = aux_epo.elec;
     data.time = aux_epo.time;
     data.label = [data.label; aux_epo.label(include_channels)];
     data.hdr.label = data.label;

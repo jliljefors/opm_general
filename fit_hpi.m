@@ -1,4 +1,4 @@
-function fit_hpi(hpi_path, aux_file, save_path, params)
+function opm_trans = fit_hpi(hpi_path, aux_file, save_path, params)
 %prprocess_osMEG Read on-scalp MEG data for benchmarking
 % recordings and combine with auxiliary TRIUX data/EEG. 
 % Requires the following arguments:
@@ -8,6 +8,8 @@ function fit_hpi(hpi_path, aux_file, save_path, params)
 if ~exist(aux_file,'file')
     error(['Did not find aux file with headshape: ' aux_file])
 end
+
+[hpi_path,hpi_file,hpi_ext ] = fileparts(hpi_path);
 
 hpi_files = dir(fullfile(hpi_path,'*HPI*_raw.fif'));
 if isempty(hpi_files)
@@ -216,6 +218,7 @@ end
 [~,i_bestfit] = max(gofsum);
 hpi_fit = hpi{i_bestfit};
 save(fullfile(save_path, 'hpi_fit'), 'hpi_fit'); disp('done');
+save(fullfile(save_path, 'timelocked'), 'timelocked'); disp('done');
 opm_trans =  hpi{i_bestfit}.opm_trans;
 save(fullfile(save_path, 'opm_trans'), 'opm_trans'); disp('done');
 

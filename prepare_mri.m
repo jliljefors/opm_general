@@ -1,7 +1,7 @@
-function prepare_mri(mri_file,meg_file,save_path)
+function prepare_mri(mri_file,opm_file,meg_file,save_path)
 %UNTITLED2 Summary of this function goes here
 %   Detailed explanation goes here
-
+    global STATIC;
     if ~exist(mri_file,'file')
         error(['Did not find MRI file: ' mri_file])
     end
@@ -12,8 +12,8 @@ function prepare_mri(mri_file,meg_file,save_path)
 
     %% Read data
     headshape = ft_read_headshape(meg_file);
-    grad    = ft_read_sens(meg_file,'senstype','meg'); % Load MEG sensors
-    elec    = ft_read_sens(meg_file,'senstype','eeg'); % Load EEG electrodes
+    grad    = ft_read_sens(opm_file,'senstype','meg'); % Load MEG sensors
+    % elec    = ft_read_sens(meg_file,'senstype','eeg'); % Load EEG electrodes
     mri = ft_read_mri(mri_file);
     
     %% Align fiducials
@@ -117,7 +117,7 @@ function prepare_mri(mri_file,meg_file,save_path)
     
     %%
     figure
-    ft_plot_sens(elec, 'style', 'ok','elecsize',10);
+    % ft_plot_sens(elec, 'style', 'ok','elecsize',10);
     ft_plot_headshape(headshape);
     ft_plot_headmodel(headmodel_eeg,'facealpha', 0.5,'FaceColor',[229 194 152]/256)
     ft_plot_axes([], 'unit', 'cm');
@@ -156,4 +156,26 @@ function prepare_mri(mri_file,meg_file,save_path)
     %% Save
     save(fullfile(save_path, 'headmodels.mat'), 'headmodels');
     save(fullfile(save_path, 'meshes.mat'), 'meshes');
+
+    %% Extract file to Freesurfer
+    % mri_segmented_2_mm = ft_convert_units(mri_segmented_2,'mm');
+    % 
+    % cfg            = [];
+    % cfg.resolution = 1;
+    % cfg.dim        = [256 256 256];
+    % mri_fs            = ft_volumereslice(cfg, mri_segmented_2_mm);
+    % 
+    % 
+    % mri_fs = ft_convert_coordsys(mri_fs,'acpc');
+    % 
+    % 
+    [parentDir, ~, ~] = fileparts(save_path);
+    if ~exist(fullfile(parentDir, 'freesurfer'),'dir')
+        mkdir(fullfile(parentDir, 'freesurfer'));
+    end
+    cfg              = [];
+    cfg.filename     = fullfile(parentDir, 'freesurfer', 'sub02');
+    cfg.filetype     = 'mgh'; 
+    cfg.parameter    = 'anatomy';
+    ft_volumewrite(cfg, mri_realigned_2);
 end

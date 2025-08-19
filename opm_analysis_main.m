@@ -584,13 +584,15 @@ for i_sub = 2
             sourcemodel = load(fullfile(save_path, [params.sub '_sourcemodel'])).sourcemodel;
         
             timelocked = load(fullfile(save_path,"timelocked.mat")).timelocked;
+           
             timelocked.grad = ft_transform_geometry(opm_trans.A, timelocked.grad);    % JL: NEED TO APPLY THE TRANSFORM ABOVE TO ALIGN THE DATA. 
             save(fullfile(save_path, [params.paradigm '_timelocked']), 'timelocked', '-v7.3');
+            
             h=figure; 
             ft_plot_mesh(sourcemodel, 'maskstyle', 'opacity', 'facecolor', 'black', 'facealpha', 0.25, 'edgecolor', 'red',   'edgeopacity', 0.5,'unit','cm');
             hold on; 
             ft_plot_headmodel(headmodels.headmodel_meg, 'facealpha', 0.25, 'edgealpha', 0.25)
-            ft_plot_sens(timelocked2.grad,'unit','cm')
+            ft_plot_sens(timelocked.grad,'unit','cm')
             hold off;
             title('OPM-MEG')
             view([-140 10])
@@ -628,7 +630,8 @@ for i_sub = 2
             
                 % timelocked = load(fullfile(save_path, [params.sub '_' params.modality '_motorimag_timelockedT' data_set '.mat'])).timelocked;
                 timelocked = load(fullfile(save_path,"timelocked.mat")).timelocked; % JL: LETS TRY THIS
-                mne = fit_mne_opmbci(timelocked,headmodels,sourcemodel,params); 
+                % mne = fit_mne_opmbci(timelocked,headmodels,sourcemodel,params); 
+                mne = fit_mne(timelocked,headmodels,sourcemodel,params); 
                 mne_inv = zeros(length(mne.avg.filter),length(mne.avg.label));
                 for i = 1:length(mne.avg.filter)
                     mne_inv(i,:) = mne.avg.filter{i};

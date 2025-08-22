@@ -60,7 +60,7 @@ for i_trl = 1:length(data_lp.trial)
         end
     end 
 end
-badchs_neighbors = find(max(mean(neighborscorr,3),[],2)<corr_threshold,2); % bad if no neighbors exceed correlation threshold
+badchs_neighbors = find(max(mean(neighborscorr,3),[],2)<corr_threshold); % bad if no neighbors exceed correlation threshold
 badchs = [badchs_flat; badchs_std; badchs_neighbors];
 
 %% Epoch

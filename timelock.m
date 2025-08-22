@@ -24,6 +24,7 @@ for i_trigger = 1:length(params.trigger_codes)
     cfg.covariance          = 'yes';
     cfg.covariancewindow    = [-params.pre 0];
     cfg.trials = find(data.trialinfo==params.trigger_codes(i_trigger));
+    cfg.channel = params.include_chs;                                        %  JL: Exclude bad channels!
     timelocked{i_trigger} = ft_timelockanalysis(cfg, data);
     timelocked{i_trigger}.trigger_code = params.trigger_codes(i_trigger);
     timelocked{i_trigger}.trigger_label = params.trigger_labels(i_trigger);

@@ -1,4 +1,4 @@
-function [data, badchs] = read_osMEG(opm_file, aux_file, save_path, params)
+function [data, badchs] = read_osMEG(opm_file, aux_file, save_path, params, trialinfo)
 %prprocess_osMEG Read on-scalp MEG data for benchmarking
 % recordings and combine with auxiliary TRIUX data/EEG. 
 % Requires the following arguments:
@@ -151,7 +151,8 @@ if ~opm_only
     data.hdr.chantype = [data.hdr.chantype; aux_epo.hdr.chantype(include_channels)];
     data.hdr.chanunit = [data.hdr.chanunit; aux_epo.hdr.chanunit(include_channels)];
     data.sampleinfo = aux_epo.sampleinfo;
-    data.trialinfo = aux_epo.trialinfo;
+    % data.trialinfo = aux_epo.trialinfo;
+    data.trialinfo = trialinfo;
     n_smpl = size(aux_epo.trial{1},2);
     for i = 1:length(data.trial)
         data.trial{i} = [data.trial{i}(:,1:n_smpl); aux_epo.trial{i}(include_channels,:)]; 

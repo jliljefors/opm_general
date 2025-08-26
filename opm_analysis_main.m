@@ -10,6 +10,8 @@ addpath(fullfile(STATIC.toolboxpath,"opm_general/"))
 % Johan
 base_save_path = 'G:\SV10_OPM_Distractor_Processing\SV10_ProcessedData\source_space';
 base_matlab_path = STATIC.toolboxpath;
+trialinfo = readtable("G:\SV10_OPM_Distractor_Processing\SV10_ProcessedData\trialinfo.csv","Delimiter",',');
+subject = {"1118","1212","1213"};
 
 % Set up fieldtrip
 
@@ -30,8 +32,8 @@ overwrite.sourcerec = true;
 % Params
 params = [];
 params.pre = 1; % Trial prestim in seconds
-params.post = 8.5; % Trial poststim in seconds
-params.pad = 0.2; % Trial (pre and post) padding in seconds
+params.post = 8.5% Trial poststim in seconds
+params.pad = 0.0; % Trial (pre and post) padding in seconds
 params.delay = 0.00; % Stimulus delay in seconds (e.g., 0.01 for eartubes or 0.041 for membranes).
 
 params.filter = [];
@@ -125,7 +127,7 @@ for i_sub = 2
 
                 % Read data
                 disp(['Reading file: ' num2str(i_paradigm) '/' num2str(length(paradigms)) '...'])
-                [data_epo, badchs_opm] = read_osMEG(opm_files{i_paradigm}, aux_files{i_paradigm}, save_path, params); % Read data
+                [data_epo, badchs_opm] = read_osMEG(opm_files{i_paradigm}, aux_files{i_paradigm}, save_path, params,trialinfo(trialinfo.subject == double(subject{i_sub}),:)); % Read data
                 grad = data_epo.grad;
                 % Reject bad channels
                 cfg = [];
@@ -209,7 +211,6 @@ for i_sub = 2
             else
                 data_ica = load(fullfile(save_path, [params.paradigm '_data_ica.mat'])).data_ica;
             end
-
             if overwrite.timelock == true || ~exist(fullfile(save_path, [params.paradigm '_timelocked.mat']),'file')
                 params.modality = 'opm';
                 params.layout = 'fieldlinebeta2bz_helmet.mat';
@@ -400,3 +401,31 @@ for i_sub = 2
 end
 
 
+%% 2. TFR SL Calculations 
+% wavelet or superlets, with and without decibel baseline
+addpath(fullfile(STATIC.toolboxpath,"cprintf/"))
+addpath("C:\Github\WM_Shifting_distractors\Matlab\helper_functions")
+% delete(gcp("nocreate"))
+% parpool(15)      % 5 cpus for 1/250s, 12 cpus for 1/100s
+for iSubject =  2
+    data_source=load(fullfile(save_path, [params.paradigm '_data_source'])).data_source;
+    
+    % % REMOVE ERP
+    cfg = [];
+    data_source_tl = ft_timelockanalysis(cfg,data_source);
+    chan_idx = contains(data_source_tl.label,'bz');
+    for iTrial = 1:numel(data_source.trial)
+        data_source.trial{iTrial} =data_source.trial{iTrial}- data_source_tl.avg;
+    end
+    % END ERP REMOVAL
+
+    TFR_data = TFR_Calculation(data_source,6:40,-0.5:1/100:10.5,'keeptrials','yes','method','superlet');
+    TFR_data.trialinfo = data_source.trialinfo;
+    % TFR_data = visual_JL(iSubject,TFR_data);
+    % TFR_data.datainfo = data_source.datainfo;
+    
+   save(fullfile(save_path, [params.paradigm '_TFR_data_source.mat']), 'TFR_data', '-v7.3');
+   time_freq = {TFR_data.time, TFR_data.freq,TFR_data.label};
+   save(fullfile(save_path, [params.paradigm '_time_freq.mat']), 'time_freq', '-v7.3');   
+end
+disp("TFR Data calculated")

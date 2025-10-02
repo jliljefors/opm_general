@@ -1,4 +1,4 @@
-function [data_ica] = ica_MEG(data,save_path,params)
+function [data_ica] = ica_MEG(data,toi, save_path,params)
 %prprocess_osMEG Preprocessing on-scalp MEG data for benchmarking
 % recordings. Requires arguments:
 % Path: containing save_path and meg_file
@@ -10,6 +10,8 @@ function [data_ica] = ica_MEG(data,save_path,params)
 save_results     = ft_getopt(params, 'save_ica', 1);
 manual_ica     = ft_getopt(params, 'manual_ica', 0);
 
+cfg = []; cfg.latency = toi;
+data_reduced = ft_selectdata(cfg,data);
 %% Downsample
 cfg             = [];
 cfg.resamplefs  = 200;
@@ -90,14 +92,14 @@ else
     cfg.artfctdef.ecg.feedback = 'no';
     cfg.channel               = 'ECG';
     cfg.artfctdef.ecg.inspect = 'ECG';
-    [cfg, ecg_artifact]       = ft_artifact_ecg(cfg,data);
+    [cfg, ecg_artifact]       = ft_artifact_ecg(cfg,data_reduced);
     
     %% Create ECG-locked
     cfg = [];
     cfg.dftfilter  = 'yes';
     cfg.demean     = 'yes';
     cfg.trl        = [ecg_artifact zeros(size(ecg_artifact,1), 2)];
-    temp = ft_redefinetrial(cfg, data);
+    temp = ft_redefinetrial(cfg, data_reduced);
     
     % Separate MEG and ECG data
     cfg.channel    = params.chs;
@@ -188,14 +190,14 @@ else
     cfg = [];
     cfg.continuous            = 'no';
     cfg.channel               = 'EOG';
-    [~, eog_artifact] = ft_artifact_eog(cfg, data);
+    [~, eog_artifact] = ft_artifact_eog(cfg, data_reduced);
     
     % Make artifact epochs
     cfg = [];
     cfg.dftfilter  = 'yes';
     cfg.demean     = 'yes';
     cfg.trl        = [eog_artifact zeros(size(eog_artifact,1), 1)];
-    temp = ft_redefinetrial(cfg, data);
+    temp = ft_redefinetrial(cfg, data_reduced);
         
     % Separate MEG and EOG data
     cfg.channel    = params.chs;

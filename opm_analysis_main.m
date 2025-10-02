@@ -2,7 +2,7 @@
 clear all
 close all
 restoredefaultpath
-
+addpath("C:\Github\WM_Shifting_distractors\Matlab")
 STATIC = StaticVarClass_WM_shift_OPM();
 addpath(fullfile(STATIC.toolboxpath,"opm_general/"))
 % Base paths
@@ -31,9 +31,9 @@ overwrite.sourcerec = true;
 
 % Params
 params = [];
-params.pre = 1; % Trial prestim in seconds
-params.post = 8.5% Trial poststim in seconds
-params.pad = 0.0; % Trial (pre and post) padding in seconds
+params.pre = 0.5; % Trial prestim in seconds
+params.post = 10; % Trial poststim in seconds
+params.pad = 1; % Trial (pre and post) padding in seconds
 params.delay = 0.00; % Stimulus delay in seconds (e.g., 0.01 for eartubes or 0.041 for membranes).
 
 params.filter = [];
@@ -82,9 +82,8 @@ paradigms = {'WM_Shift'}; % Paradigms to analyze for all participants and sessio
 subs_to_run = find(cellfun(@(x) strcmp(x,'1118'), subjects));
 
 ses_cnt = 0;
-
 %% Loop over subjects
-for i_sub = 2
+for i_sub = 1:STATIC.no_subjects
     % Loop over sessions
     for i_ses = 1:length(sessions(i_sub,:))
         if isempty(sessions{i_sub,i_ses})
@@ -97,7 +96,6 @@ for i_sub = 2
         %% Loop over subjects
         params.sub = ['sub-' num2str(i_sub,'%02d')];
         params.ses = ['ses-' num2str(i_ses,'%02d')];
-
         %% Paths
         save_path = fullfile(base_save_path, params.sub, params.ses);
         if ~exist(save_path, 'dir')
@@ -121,7 +119,6 @@ for i_sub = 2
             params.modality = 'opm';
             params.layout = 'fieldlinebeta2bz_helmet.mat';
             params.chs = '*bz';
-
             if overwrite.preproc == true || ~exist(fullfile(save_path, [params.paradigm '_data_ica.mat']),'file')
                 ft_hastoolbox('mne', 1);
 
@@ -152,7 +149,6 @@ for i_sub = 2
                     data_epo = ft_appenddata(cfg,data_epo,data_ExG);
                     clear data_ExG
                 end
-
                 % AMM
                 if params.apply_amm
                     cfg = [];
@@ -179,7 +175,6 @@ for i_sub = 2
                 cfg.threshold = params.z_threshold;
                 [cfg,badtrl_jump] = ft_badsegment(cfg, data_epo);
                 data_epo = ft_rejectartifact(cfg,data_epo);
-
                 % Reject noisy trials
                 cfg = [];
                 cfg.channel = {'*bz'};
@@ -187,7 +182,6 @@ for i_sub = 2
                 cfg.threshold = params.opm_std_threshold;
                 [cfg,badtrl_std] = ft_badsegment(cfg, data_epo);
                 data_epo = ft_rejectartifact(cfg,data_epo);
-
                 % Remove bad trials
                 [~,idx]=ismember(data_epo.sampleinfo,badtrl_jump,'rows');
                 badtrl_jump = find(idx);
@@ -203,7 +197,8 @@ for i_sub = 2
                     params.manual_ica = 1;
                     params.save_ica = 1;
                 end
-                data_ica = ica_MEG(data_epo, save_path, params);
+
+                data_ica = ica_MEG(data_epo, [-1 8.5],save_path, params);
                 data_ica.grad = grad;  % JL: % Not sure why the .grad structure isnt there, it disappears in the HFC
 
                 save(fullfile(save_path, [params.paradigm '_data_ica']), 'data_ica',"-v7.3"); disp('done');
@@ -304,7 +299,11 @@ for i_sub = 2
             params.include_chs = data_ica_ds.label(find(contains(data_ica_ds.label,'bz')));
 
             clear data_ica
-            opm_trans = fit_hpi(hpi_path, aux_files{1}, save_path, params);
+            if i_sub == 1 % Subject 1 is missing hpi data but we can use subject 2
+                opm_trans = fit_hpi(STATIC.subjectData.HPI_FilePath(2), STATIC.subjectData.MEGFilePath(2), save_path, params);
+            else
+                opm_trans = fit_hpi(hpi_path, aux_files{1}, save_path, params);
+            end
             % Plot source and head models
             clear headmodels sourcemodel
             headmodels = load(fullfile(save_path,'headmodels.mat')).headmodels;
@@ -399,33 +398,3 @@ for i_sub = 2
         close all
     end
 end
-
-
-%% 2. TFR SL Calculations 
-% wavelet or superlets, with and without decibel baseline
-addpath(fullfile(STATIC.toolboxpath,"cprintf/"))
-addpath("C:\Github\WM_Shifting_distractors\Matlab\helper_functions")
-% delete(gcp("nocreate"))
-% parpool(15)      % 5 cpus for 1/250s, 12 cpus for 1/100s
-for iSubject =  2
-    data_source=load(fullfile(save_path, [params.paradigm '_data_source'])).data_source;
-    
-    % % REMOVE ERP
-    cfg = [];
-    data_source_tl = ft_timelockanalysis(cfg,data_source);
-    chan_idx = contains(data_source_tl.label,'bz');
-    for iTrial = 1:numel(data_source.trial)
-        data_source.trial{iTrial} =data_source.trial{iTrial}- data_source_tl.avg;
-    end
-    % END ERP REMOVAL
-
-    TFR_data = TFR_Calculation(data_source,6:40,-0.5:1/100:10.5,'keeptrials','yes','method','superlet');
-    TFR_data.trialinfo = data_source.trialinfo;
-    % TFR_data = visual_JL(iSubject,TFR_data);
-    % TFR_data.datainfo = data_source.datainfo;
-    
-   save(fullfile(save_path, [params.paradigm '_TFR_data_source.mat']), 'TFR_data', '-v7.3');
-   time_freq = {TFR_data.time, TFR_data.freq,TFR_data.label};
-   save(fullfile(save_path, [params.paradigm '_time_freq.mat']), 'time_freq', '-v7.3');   
-end
-disp("TFR Data calculated")

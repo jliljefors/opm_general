@@ -95,6 +95,11 @@ if ~opm_only
 end
 
 %% OPM data filter & epoch
+% I THINK THERE MIGHT BE A HUGE PROBLEM HERE
+% THE AUX AND OPM TIMES DONT ALIGN, AND WE ARE RESAMPLING THE OPM DATA 
+% ALONG THE AUX TIME SO AT THE END OF THE SCRIPT IT MIGHT BE OFF BY 3 SECONDS!!!!
+
+
 cfg = [];
 %cfg.datafile        = opm_file;
 %cfg.coordsys        = 'dewar';
@@ -102,9 +107,16 @@ cfg = [];
 %cfg.trl             = trl_opm;
 cfg.lpfilter        = 'yes';         
 cfg.lpfreq          = params.filter.lp_freq;
+
 cfg.hpfilter        = 'yes';         
 cfg.hpfreq          = params.filter.hp_freq;
 cfg.hpinstabilityfix  = 'reduce';
+
+% JL: Adding these three for HP filter
+cfg.hpfilttype = 'firws';
+cfg.hpfiltdir  = 'twopass';
+cfg.pad        = 'maxperlen';
+
 %cfg.padding         = params.pre + params.post + 3;
 %cfg.paddingtype     = 'data';
 opm_epo = ft_preprocessing(cfg, opm_raw);

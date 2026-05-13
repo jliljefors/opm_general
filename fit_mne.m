@@ -22,7 +22,7 @@ if params.source_fixedori
 end
 
 %% MNE invserse
-peak = cell(length(params.trigger_code),length(params.peaks));
+peak = cell(length(params.trigger_codes),length(params.peaks));
 
 %% Leadfield
 cfg = [];
@@ -33,7 +33,7 @@ cfg.sourcemodel      = sourcemodel;           % source points
 cfg.headmodel        = headmodel;          % volume conduction model
 leadfield = ft_prepare_leadfield(cfg,timelocked{1});
 
-for i_trigger = 1:length(params.trigger_code)
+for i_trigger = 1:length(params.trigger_codes)
     params.i_trigger = i_trigger;
 
     %% Set covariance matrix (based on params.noise_cov selection)
@@ -42,7 +42,7 @@ for i_trigger = 1:length(params.trigger_code)
         if strcmp(params.noise_cov,'all')
             cov = '_covAll';
             timelocked{i_trigger}.cov = timelocked{i_trigger}.cov_all;
-        elseif strcmp(params.noise_cov,'resting_state') && ~isfield(timelocked{i_trigger},'cov_RS')
+        elseif strcmp(params.noise_cov,'resting_state')
             cov = '_covRS';
             if isfield(timelocked{i_trigger},'cov_RS') && size(timelocked{i_trigger}.cov_RS,1) == size(timelocked{i_trigger}.cov,1)
                 timelocked{i_trigger}.cov = timelocked{i_trigger}.cov_RS;
@@ -50,9 +50,9 @@ for i_trigger = 1:length(params.trigger_code)
                 warning('Resting state covariance not existing or incorrect size.');
                 break
             end
-        elseif strcmp(params.noise_cov,'empty_room') && ~isfield(timelocked{i_trigger},'cov_ER')
+        elseif strcmp(params.noise_cov,'empty_room')
             cov = '_covER';
-            if isfield(timelocked{i_trigger},'cov_ER') && size(timelocked{i_trigger}.cov_ER) == size(timelocked{i_trigger}.cov)
+            if isfield(timelocked{i_trigger},'cov_ER') && size(timelocked{i_trigger}.cov_ER,1) == size(timelocked{i_trigger}.cov,1)
                 timelocked{i_trigger}.cov = timelocked{i_trigger}.cov_ER;
             else
                 warning('Empty room covariance not existing or incorrect size.');
@@ -98,15 +98,14 @@ for i_trigger = 1:length(params.trigger_code)
     end
 
     for i_peak = 1:length(params.peaks)
-        peak = FullAreaHalfMax(srcdist,sourcemodel,params.peaks{i_peak}.peak_latency,params);
-        peak.label = params.peaks{i_peak}.label;
+        this_peak = FullAreaHalfMax(srcdist,sourcemodel,params.peaks{i_peak}.peak_latency,params);
+        this_peak.label = params.peaks{i_peak}.label;
 
-        h = plot_source_distribution(srcdist, peak, params); 
-        saveas(h, fullfile(save_path,'figs', [params.sub '_' params.modality '_' peak.label '_mne_trig-' params.trigger_labels{i_trigger} cov '.jpg']))
-        close all 
+        h = plot_source_distribution(srcdist, this_peak, params);
+        saveas(h, fullfile(save_path,'figs', [params.sub '_' params.modality '_' this_peak.label '_mne_trig-' params.trigger_labels{i_trigger} cov '.jpg']))
+        close all
 
-        peak{i_trigger,i_peak} = peak;
-        clear peak
+        peak{i_trigger,i_peak} = this_peak;
     end
     clear srcdist
 

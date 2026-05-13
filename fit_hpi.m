@@ -129,7 +129,8 @@ for i_file = 1:length(hpi_files)
             cfg.sourcemodel.pos = posT;
             %cfg.sourcemodel.inside = inside;
             sourcemodel = ft_prepare_sourcemodel(cfg);
-    
+            sourcemodel.unit = 'cm';
+
             cfg = [];
             cfg.numdipoles      = 1;
             cfg.gridsearch      = 'yes';
@@ -163,13 +164,13 @@ for i_file = 1:length(hpi_files)
     headshape = ft_read_headshape(aux_file);
     hpi_polhemus = headshape.pos(find(contains(headshape.label,'hpi')),:);
     [~, i_min] = min(pdist2(hpi{i_file}.dip_pos(hpi{i_file}.dip_include,1:2),hpi_polhemus(:,1:2)),[],2);
-    
+
     hpi2{i_file}.dip_pos(i_min,:) = hpi{i_file}.dip_pos(hpi{i_file}.dip_include,:);
     hpi2{i_file}.dip_ori(i_min,:) = hpi{i_file}.dip_ori(hpi{i_file}.dip_include,:);
     hpi2{i_file}.dip_include(i_min) = hpi{i_file}.dip_include(hpi{i_file}.dip_include);
     hpi2{i_file}.dip_gof(i_min,:) = hpi{i_file}.dip_gof(hpi{i_file}.dip_include);
     hpi_labels2(i_min) = hpi_labels(hpi{i_file}.dip_include);
-    
+
     ft_hastoolbox('mne',1);
     headshape = ft_read_headshape(aux_file);
     hpi_polhemus = headshape.pos(find(contains(headshape.label,'hpi')),:);

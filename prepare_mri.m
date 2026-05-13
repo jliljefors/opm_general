@@ -11,7 +11,7 @@ function prepare_mri(mri_path,meg_file,save_path, params)
         params.src_density = '8'; % default source density to use. Results in ~16k sources
     end
 
-    mri_file = fullfile(mri_path, 'mri', 'orig','001.mgz');
+    mri_file = fullfile(mri_path, 'mri', 'T1.mgz');
     if ~exist(mri_file,'file')
         error(['Did not find MRI file: ' mri_file])
     end
@@ -23,7 +23,9 @@ function prepare_mri(mri_path,meg_file,save_path, params)
     %% Read data
     headshape = ft_read_headshape(meg_file);
     mri = ft_read_mri(mri_file);
-    mri.coordsys = 'ras';
+mri.coordsys = 'ras';
+
+mri = ft_volumereslice([], mri);     % the real reslice — fixes parity once and for all
 
     %% Prealign with fiducials
     cfg = [];
@@ -46,7 +48,6 @@ function prepare_mri(mri_path,meg_file,save_path, params)
     
     %% Reslice MRI
     mri_resliced = ft_convert_units(mri_realigned_2, 'cm');
-    
     save(fullfile(save_path, 'mri_resliced.mat'), 'mri_resliced'); disp('done')
 
     %% Segment MRI
@@ -80,44 +81,44 @@ function prepare_mri(mri_path,meg_file,save_path, params)
     cfg.numvertices = 3000;
     mesh_brain = ft_prepare_mesh(cfg, mri_segmented_2);
     
-    cfg.tissue = 'skull';
-    cfg.numvertices = 2000;
-    mesh_skull = ft_prepare_mesh(cfg, mri_segmented_2);
-    
-    cfg.tissue = 'scalp';
-    cfg.numvertices = 2000;
-    mesh_scalp = ft_prepare_mesh(cfg, mri_segmented_2);
-    
-    % Collect meshes into a single structure
-    meshes = [mesh_brain mesh_skull mesh_scalp];
-    
-    figure
-    ft_plot_mesh(mesh_brain,'EdgeAlpha',0,'FaceAlpha',1,'FaceColor','r')
-    ft_plot_mesh(mesh_skull,'EdgeAlpha',0,'FaceAlpha',0.5)
-    ft_plot_mesh(mesh_scalp,'EdgeAlpha',0,'FaceAlpha',0.5,'FaceColor',[229 194 152]/256)
+    % cfg.tissue = 'skull';
+    % cfg.numvertices = 2000;
+    % mesh_skull = ft_prepare_mesh(cfg, mri_segmented_2);
+    % 
+    % cfg.tissue = 'scalp';
+    % cfg.numvertices = 2000;
+    % mesh_scalp = ft_prepare_mesh(cfg, mri_segmented_2);
+    % 
+    % % Collect meshes into a single structure
+    % meshes = [mesh_brain mesh_skull mesh_scalp];
+    % 
+    % figure
+    % ft_plot_mesh(mesh_brain,'EdgeAlpha',0,'FaceAlpha',1,'FaceColor','r')
+    % ft_plot_mesh(mesh_skull,'EdgeAlpha',0,'FaceAlpha',0.5)
+    % ft_plot_mesh(mesh_scalp,'EdgeAlpha',0,'FaceAlpha',0.5,'FaceColor',[229 194 152]/256)
 
     %% Headmodels
     cfg = [];
     cfg.method = 'singleshell';
     headmodel_meg = ft_prepare_headmodel(cfg, mesh_brain);
     
-    try
-        cfg = [];
-        cfg.method = 'bemcp';
-        cfg.conductivity = [1 1/20 1] .* (1/3);  % Standard values     
-        headmodel_eeg = ft_prepare_headmodel(cfg, meshes);
-    catch 
-        headmodel_eeg = [];
-    end
+    % try
+    %     cfg = [];
+    %     cfg.method = 'bemcp';
+    %     cfg.conductivity = [1 1/20 1] .* (1/3);  % Standard values     
+    %     headmodel_eeg = ft_prepare_headmodel(cfg, meshes);
+    % catch 
+    %     headmodel_eeg = [];
+    % end
 
     %%
     headmodels = [];
     headmodels.headmodel_meg = headmodel_meg;
-    headmodels.headmodel_eeg = headmodel_eeg;
+    % headmodels.headmodel_eeg = headmodel_eeg;
 
     %% Save
     save(fullfile(save_path, 'headmodels.mat'), 'headmodels');
-    save(fullfile(save_path, 'meshes.mat'), 'meshes');
+    save(fullfile(save_path, 'mesh_brain.mat'), 'mesh_brain');
 
     %% Sourcemodel
     % Read and transform cortical restrained source model
@@ -131,7 +132,7 @@ function prepare_mri(mri_path,meg_file,save_path, params)
         end
     end
     sourcemodel = ft_read_headshape({filename, strrep(filename, '.L.', '.R.')});
-
+    % sourcemodel.coordsys = 'scanras';
     aparc_L = ft_read_atlas({filename2,filename});
     aparc_R = ft_read_atlas({strrep(filename2,'.L.','.R.'),strrep(filename,'.L.','.R.')});
     tmp = ft_read_atlas(strrep(filename2, '.L.', '.R.'),'format','caret_label');
@@ -147,22 +148,30 @@ function prepare_mri(mri_path,meg_file,save_path, params)
     sourcemodel.brainstructurecolor = atlas.rgba;
     clear atlas aparc_L aparc_R
 
-    T = mri_resliced.transform/mri_resliced.hdr.vox2ras;
+    T = mri_resliced.transform/mri.transform;
     sourcemodel = ft_transform_geometry(T, sourcemodel);
     sourcemodel.inside = true(size(sourcemodel.pos,1),1);
 
+     figure; hold on
+    ft_plot_mesh(mesh_brain, 'EdgeAlpha', 0, 'FaceAlpha', 0.3, 'FaceColor', 'r')
+    ft_plot_mesh(sourcemodel, 'EdgeAlpha', 0.1, 'FaceAlpha', 0.6)
+    title('Source model after ICP realignment to brain mesh')
+    view(3); axis equal
+
     for i = 1:length(files)
-        if endsWith(files(i).name,'.L.inflated.8k_fs_LR.surf.gii')
+        if endsWith(files(i).name,['.L.inflated.' params.src_density 'k_fs_LR.surf.gii'])
             filename = fullfile(mri_path,'workbench',files(i).name);
         end
     end
     sourcemodel_inflated = ft_read_headshape({filename, strrep(filename, '.L.', '.R.')});
-    sourcemodel_inflated = ft_transform_geometry(T, sourcemodel_inflated);
+    sourcemodel_inflated = ft_transform_geometry(T, sourcemodel_inflated);    
     sourcemodel_inflated.inside = true(size(sourcemodel_inflated.pos,1),1);
     sourcemodel_inflated.brainstructure = sourcemodel.brainstructure;
     sourcemodel_inflated.brainstructurelabel = sourcemodel.brainstructurelabel;
     sourcemodel_inflated.brainstructurecolor = sourcemodel.brainstructurecolor;
 
+    sourcemodel.unit = 'cm';
+    sourcemodel_inflated.unit = 'cm';
     save(fullfile(save_path, 'sourcemodel'), 'sourcemodel', '-v7.3');
     save(fullfile(save_path, 'sourcemodel_inflated'), 'sourcemodel_inflated', '-v7.3');
 end

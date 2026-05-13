@@ -1,4 +1,4 @@
-function [data_cleaned] = read_osMEG(opm_file, aux_file, save_path, params)
+function [data_cleaned] = read_osMEG(opm_file, aux_file, save_path, params, trialinfo)
 %prprocess_osMEG Read on-scalp MEG data for benchmarking
 % recordings and combine with auxiliary TRIUX data/EEG. 
 % Requires the following arguments:
@@ -22,11 +22,28 @@ else
     end
 end
 
+% get opm files
+[folder, base, ext] = fileparts(opm_file);
+files = dir(fullfile(folder, [base '*' ext]));
+names = {files.name};
+splitIdx = zeros(numel(names),1);  % original file = 0
+for k = 1:numel(names)
+    tok = regexp(names{k}, [regexptranslate('escape', base) '-(\d+)' regexptranslate('escape', ext) '$'], ...
+        'tokens', 'once');
+    if ~isempty(tok)
+        splitIdx(k) = str2double(tok{1});
+    end
+end
+[~, order] = sort(splitIdx);
+files = files(order);
+opm_files = fullfile({files.folder}, {files.name})';
+
 %% --- Read triggers ---
 % OPM
 trl_opm=[];
 cfg = [];
-cfg.datafile        = opm_file;
+% cfg.datafile        = opm_file;
+cfg.dataset = opm_files;
 cfg.coordsys        = 'dewar';
 cfg.coilaccuracy    = 0;
 opm_raw = ft_preprocessing(cfg);
@@ -39,6 +56,8 @@ trl_opm(:,3) = -(params.pre+params.pad)*opm_raw.fsample;
 trl_opm(:,4) = opm_raw.trial{1}(i_trig_opm,trig);
 trl_opm(:,1:2) = trl_opm(:,1:2) + floor(params.delay*opm_raw.fsample); % adjust for stim delay
 trl_opm = round(trl_opm);
+
+trl_opm = trl_opm(ismember(trl_opm(:,4), unique(cell2mat(params.trigger_codes))),:);
 
 if ~opm_only
     % AUX
@@ -185,6 +204,8 @@ else
     data = opm_epo_ds;
 end
 
+data.trialinfo = trialinfo;
+
 %% Find & remove bad opm channels
 [badchs, badchs_flat, badchs_std, badchs_neighbors, badchs_outlier] = opm_badchannels(opm_raw, trl_opm, params);
 save(fullfile(save_path, [params.paradigm '_badchs']), ...
@@ -217,6 +238,7 @@ elseif params.do_amm
     cfg.amm.order_in = params.amm_in;
     cfg.amm.order_out = params.amm_out;
     cfg.amm.thr = params.amm_thr;
+    cfg.trials = true(1,numel(data.trial)); cfg.trials(end) = false;
     data_cleaned = ft_denoise_amm(cfg, data);
 else
     data_cleaned = data;
@@ -267,13 +289,13 @@ data_cleaned = ft_selectdata(cfg, data_cleaned);
 %% Convert to sensor definitions to cm
 data_cleaned.grad = ft_convert_units(data_cleaned.grad,'cm');
 
-%% Save bad trials
-[~,idx]=ismember(data_cleaned.sampleinfo,badtrl_jump,'rows');
-badtrl_opm_jump = find(idx);
-[~,idx]=ismember(data_cleaned.sampleinfo,badtrl_std,'rows');
-badtrl_opm_std = find(idx);
-save(fullfile(save_path, [params.sub '_opm_badtrls']), ...
-    'badtrl_opm_jump', ...
-    'badtrl_opm_std',"-v7.3"); 
+% %% Save bad trials JL DOESNT WORK
+% [~,idx]=ismember(data_cleaned.sampleinfo,badtrl_jump,'rows');
+% badtrl_opm_jump = find(idx);
+% [~,idx]=ismember(data_cleaned.sampleinfo,badtrl_std,'rows');
+% badtrl_opm_std = find(idx);
+% save(fullfile(save_path, [params.sub '_opm_badtrls']), ...
+%     'badtrl_opm_jump', ...
+%     'badtrl_opm_std',"-v7.3"); 
 
 end

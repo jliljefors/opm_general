@@ -37,7 +37,9 @@ data = ft_preprocessing(cfg,data);
 
 for i_trigger = 1:length(params.trigger_codes)
     % Select trials
-    if isnumeric(params.trigger_codes{i_trigger}) && length(params.trigger_codes{i_trigger})==1 % trigger code
+    if numel(params.trigger_codes) == 1
+        trls = true(1,height(data.trialinfo));
+    elseif isnumeric(params.trigger_codes{i_trigger}) && length(params.trigger_codes{i_trigger})==1 % trigger code
         trls = find(data.trialinfo==params.trigger_codes{i_trigger});
     elseif isnumeric(params.trigger_codes{i_trigger}) && length(params.trigger_codes{i_trigger})>1 % list of trials
         trls = params.trigger_codes{i_trigger};

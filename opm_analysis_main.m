@@ -38,7 +38,7 @@ overwrite.preproc = true;
 overwrite.timelock = true;
 overwrite.coreg = true;
 overwrite.dipole = false;
-overwrite.mne = true;
+overwrite.mne = false;
 
 
 %% Params

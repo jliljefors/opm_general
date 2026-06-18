@@ -1,7 +1,7 @@
 % OPM Pipeline adapted from Christophs opm_general
 %
-% Make sure mri_main.m is run prior to running this script!
-
+% 1. Make sure mri_main.m is run prior to running this script!
+% 2. run C:/Github/WM_Distractors_OPM/R/Shifting_distractors_OPM.Rmd to produce trialinfo
 %% Reset all
 clear all
 close all
@@ -24,6 +24,7 @@ project_scripts_path = 'C:\toolbox\opm_general';
 % addpath(fullfile(base_matlab_path,'fieldtrip')) % Fieldtrip path
 % addpath(fullfile(base_matlab_path,'fieldtrip_private')) % Fieldtrip private functions
 addpath(project_scripts_path)
+addpath('C:\toolbox\1My_functions')   % save_ft_data / load_ft_data wrappers
 ft_defaults
 
 global ft_default
@@ -44,7 +45,7 @@ overwrite.mne = false;
 %% Params
 params = [];
 params.pre = 1.5; % Trial prestim in seconds
-params.post = 9.; % Trial poststim in seconds
+params.post = 9.5; % Trial poststim in seconds
 params.pad = 0.2; % Trial (pre and post) padding in seconds
 params.delay = 0.01; % Stimulus delay in seconds (e.g., 0.01 for eartubes or 0.041 for membranes).
 
@@ -54,13 +55,13 @@ params.filter.lp_freq = [150]; % Lowpass cutoff frequency
 %params.filter.bp_freq = [1 50]; % Bandpass cutoff frequencies
 params.filter.notch = sort([50 60]); % Notch (bandstop) filter frequencies
 
-params.ds_freq = 250; % Downsample frequency. If empty or not defined no downsampling will be applied
+params.ds_freq = 1000; % Downsample frequency. If empty or not defined no downsampling will be applied
 
 % Spatiotemporal filter (OPM-MEG only)
 params.do_hfc = false;
 params.hfc_order = 2;
 params.do_amm = true;
-params.amm_in = 12;
+params.amm_in = 8;
 params.amm_out = 3;
 params.amm_thr = 0.99;
 
@@ -71,8 +72,8 @@ params.ica_cor = 0.8; % Cutoff for correlation with EOG/ECG
 params.ica_coh = 0.95; % Cutoff for coherence with EOG/ECG
 
 params.corr_threshold = 0.7; % Correlation threshold for badchannel neighbors
-params.z_threshold = 20; % Zmax threshold for badchannel and trial detection
-params.opm_std_threshold = 5e-12; % Stddev threshold for badtrial detection
+params.z_threshold = 30; %20; % Zmax threshold for badchannel and trial detection
+params.opm_std_threshold = 1e-11; %5e-12; % Stddev threshold for badtrial detection
 params.squid_std_threshold = 2.5e-12; % Stddev threshold for badtrial detection
 
 params.hpi_freq = 33; % HPI coil frequency
@@ -103,6 +104,8 @@ if server
 else
     subs_to_run = 1:length(subjects);
 end
+
+subs_to_run = 10
 
 %% Loop over subjects
 for i_sub = subs_to_run
@@ -139,6 +142,21 @@ for i_sub = subs_to_run
     if overwrite.preproc == true || ~exist(fullfile(save_path, [params.paradigm '_data_ica.mat']), 'file')
         ft_hastoolbox('mne', 1);
 
+        ann_path_tmp = char(STATIC.subjectData.Annotations_Path(i_sub));
+        hdr = ft_read_header(opm_file);
+        fprintf('\n===== Subject %d (sub-%02d) =====\n', STATIC.subjectID(i_sub), i_sub);
+        fprintf('Channel mapping:\n');
+        for i_ch = 1:length(hdr.label)
+            fprintf('  %3d: %s\n', i_ch, hdr.label{i_ch});
+        end
+        fprintf('\nAnnotations:\n');
+        if isfile(ann_path_tmp)
+            fprintf('%s\n', fileread(ann_path_tmp));
+        else
+            fprintf('(none)\n');
+        end
+        fprintf('=================================\n\n');
+
         disp('Reading OPM file...')
         data_epo = read_osMEG(opm_file, {}, save_path, params, ...
             trialinfo(trialinfo.subject==STATIC.subjectID(i_sub),:));
@@ -149,11 +167,29 @@ for i_sub = subs_to_run
             params.save_ica = 1;
         end
         data_ica = ica_MEG(data_epo, save_path, params);
-        save(fullfile(save_path, [params.paradigm '_data_ica']), 'data_ica', '-v7.3'); disp('done');
+        save_ft_data(fullfile(save_path, [params.paradigm '_data_ica.mat']), data_ica, 'Single', true); disp('done');
         clear data_epo
     else
-        data_ica = load(fullfile(save_path, [params.paradigm '_data_ica.mat'])).data_ica;
+        data_ica = load_ft_data(fullfile(save_path, [params.paradigm '_data_ica.mat']));
     end
+
+    %% Subject info (annotations + removed channels/trials/ICA comps)
+    ann_path = char(STATIC.subjectData.Annotations_Path(i_sub));
+    subject_info = struct();
+    if exist(ann_path, 'file')
+        subject_info.annotations = fileread(ann_path);
+    else
+        subject_info.annotations = '';
+        warning('Annotations file not found: %s', ann_path);
+    end
+    if isfield(data_ica, 'preproc_info')
+        subject_info.badchs      = data_ica.preproc_info.badchs;
+        subject_info.bad_trials  = data_ica.preproc_info.bad_trials;
+        subject_info.reject_comp = data_ica.preproc_info.ica_reject_comp;
+    else
+        warning('data_ica has no preproc_info field; subject_info will only contain annotations.');
+    end
+    save(fullfile(save_path, 'subject_info.mat'), 'subject_info');
 
     if overwrite.timelock == true || ~exist(fullfile(save_path, [params.paradigm '_timelocked.mat']), 'file')
         params.modality = 'opm';
@@ -242,85 +278,85 @@ for i_sub = subs_to_run
         clear sourcemodel headmodels opm_trans
     end
 
-    %% Dipole fits
-    ft_hastoolbox('mne', 1);
-    if overwrite.dipole==false
-        disp(['Not overwriting dipole source reconstruction for ' params.sub]);
-    elseif exist(fullfile(save_path, [params.sub '_opm_timelockedT.mat']), 'file')
-        headmodel = load(fullfile(save_path_mri, 'headmodels.mat')).headmodels.headmodel_meg;
-        mri_resliced = load(fullfile(save_path_mri, 'mri_resliced.mat')).mri_resliced;
-        opm_timelockedT = load(fullfile(save_path, [params.sub '_opm_timelockedT.mat'])).opm_timelockedT;
+    % %% Dipole fits
+    % ft_hastoolbox('mne', 1);
+    % if overwrite.dipole==false
+    %     disp(['Not overwriting dipole source reconstruction for ' params.sub]);
+    % elseif exist(fullfile(save_path, [params.sub '_opm_timelockedT.mat']), 'file')
+    %     headmodel = load(fullfile(save_path_mri, 'headmodels.mat')).headmodels.headmodel_meg;
+    %     mri_resliced = load(fullfile(save_path_mri, 'mri_resliced.mat')).mri_resliced;
+    %     opm_timelockedT = load(fullfile(save_path, [params.sub '_opm_timelockedT.mat'])).opm_timelockedT;
+    % 
+    %     for i_peak = 1:length(params.peaks)
+    %         peak_opm = load(fullfile(save_path, [params.sub '_opm_' params.peaks{i_peak}.label])).peak;
+    %         fit_dipoles(save_path, opm_timelockedT, headmodel, mri_resliced, params);
+    %         clear peak_opm
+    %     end
+    %     clear opm_timelockedT
+    % end
 
-        for i_peak = 1:length(params.peaks)
-            peak_opm = load(fullfile(save_path, [params.sub '_opm_' params.peaks{i_peak}.label])).peak;
-            fit_dipoles(save_path, opm_timelockedT, headmodel, mri_resliced, params);
-            clear peak_opm
-        end
-        clear opm_timelockedT
-    end
+    % %% Compute empty room covariance- MOVED TO C:\Github\WM_Distractors_OPM\Matlab\C_source_analysis.m
+    % er_cov_file = fullfile(save_path, [params.sub '_ER_opm.mat']);
+    % if ~exist(er_cov_file, 'file')
+    %     er_file = char(STATIC.subjectData.Empty_room_FilePaths(i_sub));
+    %     cfg = [];
+    %     cfg.dataset = er_file;
+    %     cfg.coordsys = 'dewar';
+    %     cfg.coilaccuracy = 0;
+    %     er_raw = ft_preprocessing(cfg);
+    %     cfg = [];
+    %     cfg.channel = {'*bz'};
+    %     cfg.covariance = 'yes';
+    %     er_tl = ft_timelockanalysis(cfg, er_raw);
+    %     opm_ER_cov = er_tl.cov;
+    %     save(er_cov_file, 'opm_ER_cov');
+    %     clear er_raw er_tl opm_ER_cov
+    % end
 
-    %% Compute empty room covariance
-    er_cov_file = fullfile(save_path, [params.sub '_ER_opm.mat']);
-    if ~exist(er_cov_file, 'file')
-        er_file = char(STATIC.subjectData.Empty_room_FilePaths(i_sub));
-        cfg = [];
-        cfg.dataset = er_file;
-        cfg.coordsys = 'dewar';
-        cfg.coilaccuracy = 0;
-        er_raw = ft_preprocessing(cfg);
-        cfg = [];
-        cfg.channel = {'*bz'};
-        cfg.covariance = 'yes';
-        er_tl = ft_timelockanalysis(cfg, er_raw);
-        opm_ER_cov = er_tl.cov;
-        save(er_cov_file, 'opm_ER_cov');
-        clear er_raw er_tl opm_ER_cov
-    end
-
-    %% MNE
-    ft_hastoolbox('mne', 1);
-    if exist(fullfile(save_path, 'opm_mne_peaks.mat'), 'file') && overwrite.mne==false
-        disp(['Not overwriting MNE source reconstruction for ' params.sub]);
-    elseif exist(fullfile(save_path, [params.sub '_opm_timelockedT.mat']), 'file')
-        clear headmodel sourcemodel sourcemodel_inflated
-        sourcemodel = load(fullfile(save_path_mri, 'sourcemodel.mat')).sourcemodel;
-        sourcemodel_inflated = load(fullfile(save_path_mri, 'sourcemodel_inflated.mat')).sourcemodel_inflated;
-        headmodel = load(fullfile(save_path_mri, 'headmodels.mat')).headmodels.headmodel_meg;
-        sourcemodel.unit = 'cm';
-        sourcemodel_inflated.unit = 'cm';
-
-        % OPM
-        clear opm_timelockedT
-        opm_timelockedT = load(fullfile(save_path, [params.sub '_opm_timelockedT.mat'])).opm_timelockedT;
-
-        for i = 1:length(opm_timelockedT)
-            if exist(er_cov_file, 'file')
-                opm_timelockedT{i}.cov_ER = load(er_cov_file).opm_ER_cov;
-            end
-        end
-
-        params.modality = 'opm';
-        params.chs = '*bz';
-        params.save_mne = true;
-        fit_mne(save_path, opm_timelockedT, headmodel, sourcemodel, sourcemodel_inflated, params);
-
-        if squid
-            % SQUID
-            clear squid_timelocked
-            squid_timelocked = load(fullfile(save_path, [params.sub '_squid_timelocked.mat'])).timelocked;
-
-            for i = 1:length(squid_timelocked)
-                squid_timelocked{i}.cov_RS = load(fullfile(save_path, [params.sub '_resting_state_squid.mat'])).squid_RS_cov;
-                if exist(fullfile(save_path, [params.sub '_ER_squid.mat']), 'file')
-                    squid_timelocked{i}.cov_ER = load(fullfile(save_path, [params.sub '_ER_squid.mat'])).squid_ER_cov;
-                end
-            end
-
-            params.modality = 'squidgrad';
-            params.chs = 'meggrad';
-            fit_mne(save_path, squid_timelocked, headmodel, sourcemodel, sourcemodel_inflated, params);
-        end
-    end
+    % %% MNE JL: SKIP MNE - MOVED TO C:\Github\WM_Distractors_OPM\Matlab\C_source_analysis.m
+    % ft_hastoolbox('mne', 1);
+    % if exist(fullfile(save_path, 'opm_mne_peaks.mat'), 'file') && overwrite.mne==false
+    %     disp(['Not overwriting MNE source reconstruction for ' params.sub]);
+    % elseif exist(fullfile(save_path, [params.sub '_opm_timelockedT.mat']), 'file')
+    %     clear headmodel sourcemodel sourcemodel_inflated
+    %     sourcemodel = load(fullfile(save_path_mri, 'sourcemodel.mat')).sourcemodel;
+    %     sourcemodel_inflated = load(fullfile(save_path_mri, 'sourcemodel_inflated.mat')).sourcemodel_inflated;
+    %     headmodel = load(fullfile(save_path_mri, 'headmodels.mat')).headmodels.headmodel_meg;
+    %     sourcemodel.unit = 'cm';
+    %     sourcemodel_inflated.unit = 'cm';
+    % 
+    %     % OPM
+    %     clear opm_timelockedT
+    %     opm_timelockedT = load(fullfile(save_path, [params.sub '_opm_timelockedT.mat'])).opm_timelockedT;
+    % 
+    %     for i = 1:length(opm_timelockedT)
+    %         if exist(er_cov_file, 'file')
+    %             opm_timelockedT{i}.cov_ER = load(er_cov_file).opm_ER_cov;
+    %         end
+    %     end
+    % 
+    %     params.modality = 'opm';
+    %     params.chs = '*bz';
+    %     params.save_mne = true;
+    %     fit_mne(save_path, opm_timelockedT, headmodel, sourcemodel, sourcemodel_inflated, params);
+    % 
+    %     if squid
+    %         % SQUID
+    %         clear squid_timelocked
+    %         squid_timelocked = load(fullfile(save_path, [params.sub '_squid_timelocked.mat'])).timelocked;
+    % 
+    %         for i = 1:length(squid_timelocked)
+    %             squid_timelocked{i}.cov_RS = load(fullfile(save_path, [params.sub '_resting_state_squid.mat'])).squid_RS_cov;
+    %             if exist(fullfile(save_path, [params.sub '_ER_squid.mat']), 'file')
+    %                 squid_timelocked{i}.cov_ER = load(fullfile(save_path, [params.sub '_ER_squid.mat'])).squid_ER_cov;
+    %             end
+    %         end
+    % 
+    %         params.modality = 'squidgrad';
+    %         params.chs = 'meggrad';
+    %         fit_mne(save_path, squid_timelocked, headmodel, sourcemodel, sourcemodel_inflated, params);
+    %     end
+    % end
 end
 
 % save(fullfile(base_save_path, 'group_results.mat'), 'grp_tag_opm','grp_tag_squid','grp_SNR_opm','grp_SNR_squid','grp_pp_opm','grp_pp_squid');

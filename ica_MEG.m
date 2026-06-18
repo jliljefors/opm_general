@@ -336,6 +336,17 @@ cfg.channel     = params.chs;
 cfg.updatesens  = 'no';
 data_ica = ft_rejectcomponent(cfg, comp, data);
 
+% Carry preprocessing info from input and add ICA rejection details
+if isfield(data, 'preproc_info')
+    data_ica.preproc_info = data.preproc_info;
+else
+    data_ica.preproc_info = struct();
+end
+data_ica.preproc_info.ica_reject_comp = reject_comp;
+if exist('ecg_comp_idx','var'),  data_ica.preproc_info.ica_ecg_comp_idx  = ecg_comp_idx;  end
+if exist('eog1_comp_idx','var'), data_ica.preproc_info.ica_eog1_comp_idx = eog1_comp_idx; end
+if exist('eog2_comp_idx','var'), data_ica.preproc_info.ica_eog2_comp_idx = eog2_comp_idx; end
+
 %% Save components
 if save_results && ~manual_ica
     save(fullfile(save_path, [params.paradigm '_ica_comp']), 'comp', 'ecg_comp_idx', 'eog1_comp_idx', 'eog2_comp_idx'); disp('done');

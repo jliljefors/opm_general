@@ -205,6 +205,8 @@ else
 end
 
 data.trialinfo = trialinfo;
+data.trialinfo.orig_trial_number = (1:height(data.trialinfo))';
+n_trials_initial = height(data.trialinfo);
 
 %% Find & remove bad opm channels
 [badchs, badchs_flat, badchs_std, badchs_neighbors, badchs_outlier] = opm_badchannels(opm_raw, trl_opm, params);
@@ -217,6 +219,8 @@ save(fullfile(save_path, [params.paradigm '_badchs']), ...
 cfg = [];
 cfg.channel = setdiff(data.label,badchs);
 data = ft_selectdata(cfg, data);
+data.coordsys = 'scanras';
+data.grad.coordsys = 'scanras';
 
 %% Spatiotemporal filtering
 cfg = []; % separate ExG channels
@@ -255,27 +259,16 @@ for i = 1:length(data_cleaned.trial)
     data_cleaned.trial{i} = vertcat(data_cleaned.trial{i}, ExG.trial{i}); 
 end
 
-%% Reject jump trials
-cfg = [];
+%% Visual trial rejection
+cfg         = [];
+cfg.method  = 'summary';
 cfg.channel = {'*bz'};
-cfg.metric = 'maxzvalue';
-cfg.preproc.medianfilter  = 'yes';
-cfg.preproc.medianfiltord  = 9;
-cfg.preproc.absdiff       = 'yes';
-cfg.threshold = params.z_threshold;
-[cfg,badtrl_jump] = ft_badsegment(cfg, data_cleaned);
-data_cleaned = ft_rejectartifact(cfg,data_cleaned);
-
-%% Reject noisy trials
-cfg = [];
-cfg.channel = {'*bz'};
-cfg.metric = 'std';
-cfg.threshold = params.opm_std_threshold;
-[cfg,badtrl_std] = ft_badsegment(cfg, data_cleaned);
-data_cleaned = ft_rejectartifact(cfg,data_cleaned);
+cfg.metric  = 'std';
+cfg.layout  = params.layout;
+data_cleaned = ft_rejectvisual(cfg, data_cleaned);
 
 %% Downsample
-if isfield(params,'ds_freq') && ~isempty(params.ds_freq) && params.ds_freq~=1000
+if isfield(params,'ds_freq') && ~isempty(params.ds_freq) 
     cfg = [];
     cfg.resamplefs = params.ds_freq;
     data_cleaned = ft_resampledata(cfg, data_cleaned);
@@ -288,6 +281,21 @@ data_cleaned = ft_selectdata(cfg, data_cleaned);
 
 %% Convert to sensor definitions to cm
 data_cleaned.grad = ft_convert_units(data_cleaned.grad,'cm');
+
+%% Preprocessing info (carried through pipeline; consolidated in subject_info.mat)
+data_cleaned.preproc_info = struct();
+data_cleaned.preproc_info.badchs           = badchs;
+data_cleaned.preproc_info.badchs_flat      = badchs_flat;
+data_cleaned.preproc_info.badchs_std       = badchs_std;
+data_cleaned.preproc_info.badchs_neighbors = badchs_neighbors;
+data_cleaned.preproc_info.badchs_outlier   = badchs_outlier;
+data_cleaned.preproc_info.n_trials_initial = n_trials_initial;
+if istable(data_cleaned.trialinfo) && any(strcmp(data_cleaned.trialinfo.Properties.VariableNames, 'orig_trial_number'))
+    data_cleaned.preproc_info.bad_trials = setdiff((1:n_trials_initial)', data_cleaned.trialinfo.orig_trial_number);
+else
+    data_cleaned.preproc_info.bad_trials = [];
+    warning('read_osMEG: orig_trial_number column not found on data_cleaned.trialinfo; bad_trials not tracked.');
+end
 
 % %% Save bad trials JL DOESNT WORK
 % [~,idx]=ismember(data_cleaned.sampleinfo,badtrl_jump,'rows');

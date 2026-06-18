@@ -20,7 +20,7 @@ project_scripts_path = 'C:\toolbox\opm_general';
 params.src_density = '32'; % Sourcemodel density ('4', '8' or '32') = approximate number of sourmes per hemisphere
 
 %% Loop over subjects
-for i_sub = 1:height(STATIC.subjectData)
+for i_sub = 10:height(STATIC.subjectData)
     params.sub = ['sub-' num2str(i_sub,'%02d')];
 
     save_path_mri = fullfile(base_save_path,params.sub ,'MRI');
